@@ -12,6 +12,7 @@ eeg_data = mat_data['djc_eeg1']
 
 
 sfreq = 256
+
 ch_names = ['EEG{}'.format(i) for i in range(1, 63)]  # 假设你的数据有62个通道
 info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types='eeg')
 
