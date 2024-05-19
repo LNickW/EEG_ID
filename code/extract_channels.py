@@ -4,7 +4,7 @@ import numpy as np
 
 # 定义基础目录
 base_dir = 'D:\SEED\SEED_EEG\Preprocessed_EEG'
-output_dir = 'D:\PyCharm\EEG_ID\dataset'
+output_dir = '/dataset'
 
 # 遍历基础目录下的所有 .mat 文件
 for file_name in os.listdir(base_dir):
