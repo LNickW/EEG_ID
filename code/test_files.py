@@ -1,5 +1,5 @@
 #here is a test file
-"""to test the code"""
+"""to test the remote repository"""
 
 
 print("Hello World")#test for the first commit
