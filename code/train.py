@@ -1,3 +1,5 @@
+##use mne to preprocess the data, extract events and labels, extract epochs, extract PLV features, reduce the dimension of features using PCA, split the data into training set and validation set, train a classification model using LDA, and validate the model using cross-validation and test set.
+
 import mne
 from mne.preprocessing import ICA
 from sklearn.decomposition import PCA
