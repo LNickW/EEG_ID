@@ -1,54 +1,41 @@
+import scipy.io
+import numpy as np
 import mne
-from mne.preprocessing import ICA
 from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
-import numpy as np
+from sklearn.model_selection import cross_val_score
 import matplotlib.pyplot as plt
 import seaborn as sns
+from mne.preprocessing import ICA
 
-# 加载数据
-file_path = 'path_to_seed_data.set'  # 假设数据格式为EEGLAB的SET格式
-raw = mne.io.read_raw_eeglab(file_path, preload=True)
+# 定义加载和预处理函数
+def load_and_preprocess_mat(file_path):
+    mat = scipy.io.loadmat(file_path)
+    # 假设.mat文件包含一个字典，其中有15个key，每个key代表一个数据段
+    data = np.array([mat[key] for key in mat if not key.startswith('__')])
+    data = data.reshape(data.shape[0], -1)
+    return data
 
-# 数据预处理
-def preprocess_data(raw):
+def preprocess_data(data):
+    # 创建MNE RawArray对象
+    ch_names = [f'eeg{i+1}' for i in range(data.shape[0])]
+    info = mne.create_info(ch_names=ch_names, sfreq=200, ch_types='eeg') # 采样率为200Hz
+    raw = mne.io.RawArray(data, info)
+
     # 滤波
-    raw.filter(8., 30., fir_design='firwin')  # 带通滤波，提取β频段
-    print("滤波完成")
+    raw.filter(8., 30., fir_design='firwin')
 
     # 伪迹去除
     ica = ICA(n_components=15, random_state=97)
     ica.fit(raw)
     raw = ica.apply(raw)
-    print("伪迹去除完成")
 
     return raw
 
-raw = preprocess_data(raw)
-
-# 绘制原始数据的时间序列图
-raw.plot(n_channels=10, scalings='auto', title='原始数据的时间序列图')
-plt.show()
-
-# 提取事件和标签
-events, event_ids = mne.events_from_annotations(raw)
-labels = np.array([event_ids[event[2]] for event in events])
-print(f"事件和标签提取完成，共提取到{len(events)}个事件")
-
-# 绘制事件的时间序列图
-mne.viz.plot_events(events, event_id=event_ids, sfreq=raw.info['sfreq'])
-plt.show()
-
-# 提取数据段
-epochs = mne.Epochs(raw, events, event_ids, tmin=0, tmax=2, baseline=None, preload=True)
-print("数据段提取完成")
-
-# 提取PLV特征
 def calculate_plv(epochs):
     plv_data = []
-    for epoch in epochs:
+    for epoch in epochs.get_data():
         n_channels = epoch.shape[0]
         n_samples = epoch.shape[1]
         plv_matrix = np.zeros((n_channels, n_channels))
@@ -63,57 +50,85 @@ def calculate_plv(epochs):
 
         plv_data.append(plv_matrix.flatten())
 
-    print("PLV特征提取完成")
     return np.array(plv_data)
 
-plv_features = calculate_plv(epochs)
+# 加载数据
+train_data, val_data, test_data = [], [], []
+train_labels, val_labels, test_labels = [], [], []
+
+# 每组数据存储在 "extracted_X_Y.mat" 文件中，其中 X 是受试者编号，Y 是数据组编号
+for subject in range(1, 16):
+    for group in range(1, 4):
+        file_path = f'extracted_{subject}_{group}.mat'
+        data = load_and_preprocess_mat(file_path)
+        raw = preprocess_data(data)
+
+        # 提取事件和标签
+        events, event_ids = mne.events_from_annotations(raw)
+        labels = np.array([event_ids[event[2]] for event in events])
+
+        # 提取数据段
+        epochs = mne.Epochs(raw, events, event_ids, tmin=0, tmax=2, baseline=None, preload=True)
+
+        # 提取PLV特征
+        plv_features = calculate_plv(epochs)
+
+        # 根据受试者编号划分数据集
+        if subject <= 9:
+            train_data.append(plv_features)
+            train_labels.append(labels)
+        elif 10 <= subject <= 12:
+            val_data.append(plv_features)
+            val_labels.append(labels)
+        else:
+            test_data.append(plv_features)
+            test_labels.append(labels)
+
+# 转换为 numpy 数组
+train_data = np.vstack(train_data)
+train_labels = np.concatenate(train_labels)
+val_data = np.vstack(val_data)
+val_labels = np.concatenate(val_labels)
+test_data = np.vstack(test_data)
+test_labels = np.concatenate(test_labels)
 
 # 特征规范化
 scaler = StandardScaler()
-plv_features = scaler.fit_transform(plv_features)
-print("特征规范化完成")
+train_data = scaler.fit_transform(train_data)
+val_data = scaler.transform(val_data)
+test_data = scaler.transform(test_data)
 
 # 特征降维
 pca = PCA(n_components=10)
-features = pca.fit_transform(plv_features)
-print("特征降维完成")
-
-# 绘制PCA结果
-plt.figure(figsize=(10, 7))
-plt.scatter(features[:, 0], features[:, 1], c=labels, cmap='viridis', edgecolor='k', s=50)
-plt.xlabel('PCA Component 1')
-plt.ylabel('PCA Component 2')
-plt.title('PCA特征分布图')
-plt.colorbar()
-plt.show()
-
-# 划分训练集和验证集
-X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.3, random_state=42)
-print(f"数据集划分完成：训练集大小={len(y_train)}, 验证集大小={len(y_test)}")
+train_data = pca.fit_transform(train_data)
+val_data = pca.transform(val_data)
+test_data = pca.transform(test_data)
 
 # 训练分类模型
 mlp = MLPClassifier(hidden_layer_sizes=(100,), max_iter=500, random_state=42)
-mlp.fit(X_train, y_train)
+mlp.fit(train_data, train_labels)
 print("分类模型训练完成")
 
 # 交叉验证
-scores = cross_val_score(mlp, X_train, y_train, cv=5)
+scores = cross_val_score(mlp, train_data, train_labels, cv=5)
 print('交叉验证分类准确率：', np.mean(scores))
 
 # 绘制交叉验证结果
 plt.figure(figsize=(10, 7))
-sns.boxplot(scores)
+sns.boxplot(data=scores)
 plt.title('交叉验证分类准确率')
 plt.ylabel('Accuracy')
 plt.show()
 
 # 验证模型
-test_score = mlp.score(X_test, y_test)
-print('验证集分类准确率：', test_score)
+val_score = mlp.score(val_data, val_labels)
+test_score = mlp.score(test_data, test_labels)
+print('验证集分类准确率：', val_score)
+print('测试集分类准确率：', test_score)
 
-# 绘制验证集分类结果
+# 绘制验证集和测试集分类结果
 plt.figure(figsize=(10, 7))
-plt.bar(['Cross-validation', 'Test'], [np.mean(scores), test_score], color=['blue', 'green'])
+plt.bar(['Cross-validation', 'Validation', 'Test'], [np.mean(scores), val_score, test_score], color=['blue', 'orange', 'green'])
 plt.title('分类准确率对比')
 plt.ylabel('Accuracy')
 plt.show()
