@@ -14,7 +14,7 @@ for file_name in os.listdir(base_dir):
         # 加载 .mat 文件
         mat_data = sio.loadmat(file_path)
 
-        # 初始化一个字典来存储提取后的数据
+        # 初始化字典来存储提取后的数据
         extracted_data = {}
 
         # 遍历 .mat 文件中的所有键值对
