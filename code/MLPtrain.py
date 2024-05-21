@@ -11,13 +11,52 @@ from mne.preprocessing import ICA
 import os
 from loader import load_mat_files  # 确保你正确导入 load_mat_files
 
-# 定义加载和预处理函数
+
+def extract_data_and_annotations(struct):
+    """
+    递归提取结构体中的 `data` 和 `annotations` 字段。
+    """
+    data = None
+    annotations = None
+    if isinstance(struct, np.ndarray) and struct.size == 1:
+        struct = struct[0]
+    if isinstance(struct, np.void) and struct.dtype.names:
+        if 'data' in struct.dtype.names and 'annotations' in struct.dtype.names:
+            data = struct['data']
+            annotations = struct['annotations']
+        else:
+            for name in struct.dtype.names:
+                if data is None or annotations is None:
+                    extracted_data, extracted_annotations = extract_data_and_annotations(struct[name])
+                    if extracted_data is not None:
+                        data = extracted_data
+                    if extracted_annotations is not None:
+                        annotations = extracted_annotations
+    return data, annotations
+
+
 def load_and_preprocess_mat(file_path):
     try:
         if os.path.exists(file_path):
             print(f"Loading file: {file_path}")
             mat = scipy.io.loadmat(file_path)
-            data_list = [mat[key] for key in mat if not key.startswith('__')]
+
+            data_list = []
+            annotations_list = []
+            for key in mat:
+                if not key.startswith('__'):
+                    item = mat[key]
+                    print(f"Key: {key}, Type: {type(item)}, Shape: {item.shape}")
+                    data, annotations = extract_data_and_annotations(item)
+                    if data is not None and annotations is not None:
+                        print(f"Extracted data shape from {key}: {data.shape}")
+                        data_list.append(data)
+                        annotations_list.append(annotations)
+                    else:
+                        print(f"Warning: 'data' or 'annotations' field not found in struct {key}")
+
+            if not data_list:
+                raise ValueError("No valid 'data' fields found in the .mat file.")
 
             # 确保所有数组的形状一致
             max_len = max([d.shape[1] for d in data_list])
@@ -33,15 +72,17 @@ def load_and_preprocess_mat(file_path):
             data = np.array(uniform_data)
             data = data.reshape(data.shape[0], -1)
             print(f"Loaded data shape: {data.shape}")
-            return data
+            return data, annotations_list
         else:
             raise FileNotFoundError(f"File not found: {file_path}")
     except Exception as e:
         print(f"Error loading file {file_path}: {e}")
-        return None
+        return None, None
 
-# 定义数据预处理函数
 def preprocess_data(data, sfreq):
+    """
+    预处理数据，创建MNE RawArray对象
+    """
     try:
         ch_names = [f'eeg{i+1}' for i in range(data.shape[0])]
         info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types='eeg')
