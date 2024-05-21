@@ -51,3 +51,6 @@ if __name__ == "__main__":
         scaler = StandardScaler()
         transformed_data = scaler.fit_transform(combined_data.T).T  # Transpose for sklearn, then transpose back
         print(f"Transformed data shape: {transformed_data.shape}")
+
+    # Explicitly delete variables to free up memory
+    del all_data, combined_data, transformed_data, scaler
