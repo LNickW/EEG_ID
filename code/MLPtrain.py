@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from mne.preprocessing import ICA
 import os
-from loader import load_mat_files  # 确保你正确导入 load_mat_files
+from loader import load_mat_files
 
 
 def extract_data_and_annotations(struct):
@@ -121,10 +121,16 @@ def calculate_plv(epochs):
         print(f"Error calculating PLV: {e}")
         return None
 
+
+
+
+
+
+
 # 加载数据
 train_data, val_data, test_data = [], [], []
 train_labels, val_labels, test_labels = [], [], []
-
+###
 sfreq = 200  # 设置实际采样率为200Hz
 data_directory = 'D:\PyCharm\EEG_ID\dataset_2'  # 替换为实际的数据目录路径
 
