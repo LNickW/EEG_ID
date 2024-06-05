@@ -7,6 +7,3 @@ Using EEG signals to recognize human identities. EEG signals channels include fp
 ## Models
 ## Results
 ## Conclusion
-
-
- 
